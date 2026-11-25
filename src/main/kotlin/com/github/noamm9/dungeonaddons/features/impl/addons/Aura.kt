@@ -31,6 +31,7 @@ import net.minecraft.world.entity.Entity
 import net.minecraft.world.entity.decoration.ArmorStand
 import net.minecraft.world.entity.decoration.ItemFrame
 import net.minecraft.world.item.Items
+import net.minecraft.world.level.ClipContext
 import net.minecraft.world.level.block.Blocks
 import net.minecraft.world.level.block.ButtonBlock
 import net.minecraft.world.level.block.ChestBlock
@@ -41,8 +42,10 @@ import net.minecraft.world.level.block.state.BlockState
 import net.minecraft.world.phys.AABB
 import net.minecraft.world.phys.BlockHitResult
 import net.minecraft.world.phys.EntityHitResult
+import net.minecraft.world.phys.HitResult
 import net.minecraft.world.phys.Vec3
 import kotlin.math.abs
+import kotlin.math.acos
 import kotlin.math.atan2
 import kotlin.math.ceil
 import kotlin.math.sqrt
@@ -57,7 +60,9 @@ object Aura: Feature(
     description = "&c&lWARNING! &cThis &ccan &cget &cyou &cbanned &cvery &cquickly!\n&r secret aura + p3 aura",
     name = "Aura"
 ) {
-    private val range by SliderSetting("Range", 5.0, 2.0, 6.0, 0.1, " blocks")
+    private val range by SliderSetting("Range", 5.5, 2.0, 6.0, 0.1, " blocks")
+    private val headRange by SliderSetting("Head Range", 4.5, 2.0, 6.0, 0.1, " blocks")
+        .withDescription("Range for player heads (wither essence and redstone skulls), those can't be reached as far.")
     private val clickDelay by SliderSetting("Click Delay", 150, 50, 1000, 10, "ms")
     private val leverDelay by SliderSetting("Lever Delay", 200, 100, 1000, 10, "ms")
         .withDescription("Used for levers instead of Click Delay, before and after flipping one. Levers do not like getting flipped with less than 100ms delay.")
@@ -85,10 +90,13 @@ object Aura: Feature(
     private val closeChests by ToggleSetting("Close Chests", true).section("Options")
     private val noHeadsWithAbility by ToggleSetting("No Heads With Wither Blade/AOTV")
         .withDescription("Disables clicks on player heads (wither essence and redstone skulls) while holding a wither blade or AOTV, so you do not teleport.")
-    private val serverRotate by ToggleSetting("Server Rotation")
+    private val serverRotate by ToggleSetting("Server Rotation", true)
         .withDescription("Turns your head onto each secret for the server and other players before clicking, your screen doesn't move.")
     private val rotationTicks by SliderSetting("Rotation Ticks", 2, 1, 5, 1, " ticks")
         .withDescription("Ticks to turn there and back again. &e1 is the quickest.").showIf { serverRotate.value }
+    private val throughWalls by ToggleSetting("Through Walls", true)
+    private val fov by SliderSetting("FOV", 180, 15, 180, 5, "°")
+        .withDescription("How far left and right of your crosshair it clicks things. &e180 is every direction.")
 
     /** The rotation the server gets instead of the real one, null for the real one. Read by MixinLocalPlayer. */
     @JvmField var serverRotation: MathUtils.Rotation? = null
@@ -199,9 +207,20 @@ object Aura: Feature(
         arrowFrame()?.let { (frame, index) -> return request(frame.boundingBox.center) { clickFrame(frame, index) } }
     }
 
-    private fun inRange(target: Vec3): Boolean {
-        val eye = mc.player?.eyePosition ?: return false
-        return target.distanceToSqr(eye) <= range.value * range.value
+    // In reach, inside the FOV and, without Through Walls, not behind a block
+    private fun inRange(target: Vec3, reach: Double = range.value): Boolean {
+        val player = mc.player ?: return false
+        val eye = player.eyePosition
+        val to = target.subtract(eye)
+        if (to.lengthSqr() > reach * reach) return false
+        if (fov.value < 180 && to.lengthSqr() > 1e-6) {
+            val angle = Math.toDegrees(acos(player.lookAngle.dot(to.normalize()).coerceIn(- 1.0, 1.0)))
+            if (angle > fov.value) return false
+        }
+        if (throughWalls.value) return true
+        val hit = mc.level?.clip(ClipContext(eye, target, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, player)) ?: return false
+        // hitting the target block itself is fine
+        return hit.type == HitResult.Type.MISS || hit.blockPos == BlockPos.containing(target)
     }
 
     // The closest inactive terminal in range, opened right here. Not while one is open, a hidden Auto Terminal Walk one too.
@@ -317,7 +336,7 @@ object Aura: Feature(
         val origin = BlockPos.containing(eye)
         return BlockPos.betweenClosed(origin.offset(- r, - r, - r), origin.offset(r, r, r))
             .asSequence()
-            .filter { inRange(Vec3.atCenterOf(it)) && match(it, level.getBlockState(it)) }
+            .filter { match(it, level.getBlockState(it)) && inRange(Vec3.atCenterOf(it)) }
             .map { it.immutable() }
             .minByOrNull { Vec3.atCenterOf(it).distanceToSqr(eye) }
     }
@@ -465,11 +484,10 @@ object Aura: Feature(
         val rotation = 360 - (room.rotation ?: return null)
         val answerBlock = ScanUtils.getRealCoord(quizBlocks[option], room.centerPos, rotation)
         val level = mc.level ?: return null
-        val eye = mc.player?.eyePosition ?: return null
 
         val button = (listOf(answerBlock) + Direction.entries.map { answerBlock.relative(it) })
             .firstOrNull { level.getBlockState(it).block is ButtonBlock } ?: return null
-        if (Vec3.atCenterOf(button).distanceToSqr(eye) > range.value * range.value) return null
+        if (! inRange(Vec3.atCenterOf(button))) return null
 
         quizTries ++
         quizClickedAt = System.currentTimeMillis()
@@ -487,8 +505,9 @@ object Aura: Feature(
     private fun findSecret(): BlockPos? {
         val player = mc.player ?: return null
         val eye = player.eyePosition
-        val r = ceil(range.value).toInt()
-        val maxSq = range.value * range.value
+        val maxRange = maxOf(range.value, headRange.value)
+        val r = ceil(maxRange).toInt()
+        val maxSq = maxRange * maxRange
         val origin = BlockPos.containing(eye)
         val now = System.currentTimeMillis()
 
@@ -497,6 +516,7 @@ object Aura: Feature(
             .filter { Vec3.atCenterOf(it).distanceToSqr(eye) <= maxSq }
             .filter { it !in clicked && (retryAt[it] ?: 0L) <= now && wanted(it) }
             .map { it.immutable() }
+            .filter { inRange(Vec3.atCenterOf(it), if (isHead(it)) headRange.value else range.value) }
             .filter(::allowedInRoom)
             .minByOrNull { Vec3.atCenterOf(it).distanceToSqr(eye) }
     }
@@ -584,6 +604,8 @@ object Aura: Feature(
             else -> false
         }
     }
+
+    private fun isHead(pos: BlockPos) = mc.level?.getBlockState(pos)?.block.let { it is SkullBlock || it is WallSkullBlock }
 
     // the Triggerbot uses it too
     internal fun holdingAbilityItem() = mc.player?.mainHandItem?.skyblockId in abilityItems
