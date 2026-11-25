@@ -18,17 +18,6 @@ Works on Minecraft 26.2 and 26.3 with Fabric.
 
 ## Features
 
-### AutoTerm+InvWalk
-
-Clicks terminals for you while hiding the gui so you can move and interact while an auto term is doing the terminal
-
-### Inv Walk
-
-Walk with your inventory open. WASD, jump and sneak keep working, while the mouse stays in the inventory and doesn't turn the camera.
-
-* Containers: also walk in chests and other menus, not only your own inventory.
-* Disable Sneak: shift doesn't make you sneak while a menu is open, so shift-clicking items doesn't make you crouch.
-
 ### Aura
 
 Clicks things near you, even through walls, without you having to look at them. 
@@ -37,7 +26,7 @@ Clicks things near you, even through walls, without you having to look at them.
 * Puzzles:
    opens the reward chest once the puzzle is done.
 * Boss (F7/M7 phase 3):
-   * Terminals: opens the closest inactive terminal, not while one is open (a hidden AutoTerm+InvWalk one too).
+   * Terminals: opens the closest inactive terminal, not while one is open.
    * Section Levers: flips the levers of every section once per P3.
    * Lights Device: flips the six right levers. If you pre-devved it, once P3 started it clicks the lowest middle lever to complete it, unless it's already active.
    * Arrow Device: once P3 started, turns the arrows that are still wrong.

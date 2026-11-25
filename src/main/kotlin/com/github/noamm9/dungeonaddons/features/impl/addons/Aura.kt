@@ -223,7 +223,7 @@ object Aura: Feature(
         return hit.type == HitResult.Type.MISS || hit.blockPos == BlockPos.containing(target)
     }
 
-    // The closest inactive terminal in range, opened right here. Not while one is open, a hidden Auto Terminal Walk one too.
+    // The closest inactive terminal in range, opened right here. Not while one is open.
     private fun bossTerminal(): Unit? {
         if (! terminals.value) return null
         val player = mc.player ?: return null

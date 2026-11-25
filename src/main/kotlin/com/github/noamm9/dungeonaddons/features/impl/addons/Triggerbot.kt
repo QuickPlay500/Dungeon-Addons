@@ -158,7 +158,7 @@ object Triggerbot: Feature(
         if (! terminals.value) return
         if (System.currentTimeMillis() - lastTerminalTry < terminalDelay.value) return
         val player = mc.player ?: return
-        // a terminal is already open, a hidden Auto Terminal Walk one too
+        // a terminal is already open
         if (TerminalListener.inTerm || TerminalListener.lastWindowId != - 1) return
         if (player.containerMenu !== player.inventoryMenu) return
 
