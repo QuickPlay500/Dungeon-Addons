@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "${mod_id}",
   "version": "${version}",
-  "name": "${mod_name}",
+  "name": "Dungeon-Addons",
   "description": "",
   "authors": [],
   "contact": {},
@@ -12,7 +12,7 @@
   "entrypoints": {
     "client": [
       {
-        "value": "com.github.noamm9.untitled.Untitled",
+        "value": "com.github.noamm9.dungeonaddons.DungeonAddons",
         "adapter": "kotlin"
       }
     ]
